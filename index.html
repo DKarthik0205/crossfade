@@ -501,7 +501,10 @@
       const card = document.createElement('div');
       card.className = 'playlist-card';
       const img = (pl.images && pl.images[0]) ? pl.images[0].url : '';
-      const trackCount = (pl.tracks && typeof pl.tracks.total === 'number') ? pl.tracks.total : 0;
+      const rawCount = pl.items && typeof pl.items.total === 'number'
+        ? pl.items.total
+        : (pl.tracks && typeof pl.tracks.total === 'number' ? pl.tracks.total : 0);
+      const trackCount = rawCount;
       const displayName = pl.name || 'Untitled playlist';
       card.innerHTML = `
         ${img ? `<img src="${img}" alt="">` : `<div style="width:48px;height:48px;border-radius:6px;background:var(--surface-2);flex:none;"></div>`}
@@ -533,15 +536,16 @@
 
   async function fetchAllSpotifyTracks(playlist){
     let tracks = [];
-    let url = `/playlists/${playlist.id}/tracks?limit=100&fields=next,items(track(name,artists(name),album(name)))`;
+    let url = `/playlists/${playlist.id}/items?limit=100&fields=next,items(item(name,artists(name),album(name)),track(name,artists(name),album(name)))`;
     while(url){
       const data = await spotifyFetch(url);
-      data.items.forEach(item => {
-        if(!item.track) return;
+      data.items.forEach(entry => {
+        const item = entry.item || entry.track; // Spotify renamed 'track' to 'item' in Feb 2026
+        if(!item) return;
         tracks.push({
-          name: item.track.name,
-          artists: (item.track.artists || []).map(a => a.name),
-          album: item.track.album ? item.track.album.name : '',
+          name: item.name,
+          artists: (item.artists || []).map(a => a.name),
+          album: item.album ? item.album.name : '',
         });
       });
       url = data.next ? data.next.replace('https://api.spotify.com/v1','') : null;
