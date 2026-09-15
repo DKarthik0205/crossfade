@@ -293,23 +293,35 @@
   <!-- STEP 3: Apple Music -->
   <div class="panel" id="panel-apple" data-disabled="true">
     <div class="step-head"><div class="step-num">3</div><div class="step-title">Connect Apple Music</div></div>
-    <div class="step-desc">Apple Music requires a developer token (a signed key from an Apple Developer account) — Crossfade can't generate this for you, but it only takes a few minutes if you don't already have one.</div>
+    <div class="step-desc">Apple Music requires a key from an Apple Developer account, but Crossfade builds the developer token from it right here in your browser — no separate signing script to run.</div>
 
+    <div class="field-row">
+      <div class="field">
+        <label for="apple-team-id">Team ID</label>
+        <input type="text" id="apple-team-id" placeholder="e.g. ABCDE12345">
+      </div>
+      <div class="field">
+        <label for="apple-key-id">Key ID</label>
+        <input type="text" id="apple-key-id" placeholder="e.g. XYZ98W7654">
+      </div>
+    </div>
     <div class="field">
-      <label for="apple-dev-token">Apple Music developer token</label>
-      <textarea id="apple-dev-token" placeholder="Paste your MusicKit developer token (a long string starting with eyJ...)"></textarea>
+      <label for="apple-private-key">Private key (.p8 file contents)</label>
+      <textarea id="apple-private-key" placeholder="-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----"></textarea>
     </div>
     <button class="btn btn-apple" id="btn-apple-connect">Connect Apple Music</button>
 
     <details class="help">
-      <summary>Where do I get a developer token?</summary>
+      <summary>Where do I get these?</summary>
       <div class="help-body">
-        This requires an active <strong>Apple Developer Program</strong> membership ($99/yr) — there's no free tier for Apple Music API access.
+        This requires an active <strong>Apple Developer Program</strong> membership ($99/yr) — there's no free tier for Apple Music API access. Nothing here ever leaves your browser except to Apple's own servers.
         <ol>
           <li>In your <a href="https://developer.apple.com/account/resources/identifiers/list/musicId" target="_blank" rel="noopener">Apple Developer account</a>, create a <strong>MusicKit identifier</strong>.</li>
-          <li>Under <strong>Keys</strong>, create a new key with the <strong>MusicKit</strong> service enabled, and download the <code>.p8</code> private key file.</li>
-          <li>Sign a JWT with that key (ES256), using your <strong>Team ID</strong> as issuer and the <strong>Key ID</strong> as the key id — Apple's <a href="https://developer.apple.com/documentation/applemusicapi/generating_developer_tokens" target="_blank" rel="noopener">developer token guide</a> has copy-pasteable examples in several languages.</li>
-          <li>Paste the resulting token above. It's safe to keep reusing the same token until it expires (up to 6 months).</li>
+          <li>Under <strong>Keys</strong>, create a new key with the <strong>MusicKit</strong> service enabled, and download the <code>.p8</code> file. Apple only lets you download it once, so keep it somewhere safe.</li>
+          <li>Open the <code>.p8</code> file in a text editor and paste its full contents — including the <code>BEGIN/END PRIVATE KEY</code> lines — into the field above.</li>
+          <li>Your <strong>Team ID</strong> is on the <a href="https://developer.apple.com/account" target="_blank" rel="noopener">Membership page</a>; the <strong>Key ID</strong> is shown next to the key you just created.</li>
         </ol>
       </div>
     </details>
@@ -544,13 +556,62 @@
     });
   }
 
+  // Builds an Apple Music developer token (an ES256-signed JWT) entirely
+  // client-side, from the raw credentials Apple gives you. Nothing here
+  // is sent anywhere — the signing happens locally via Web Crypto.
+  function pemToBuffer(pem){
+    const b64 = pem
+      .replace(/-----BEGIN (.*)-----/, '')
+      .replace(/-----END (.*)-----/, '')
+      .replace(/\s+/g, '');
+    const raw = atob(b64);
+    const bytes = new Uint8Array(raw.length);
+    for(let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    return bytes.buffer;
+  }
+
+  async function buildAppleDeveloperToken(teamId, keyId, privateKeyPem){
+    const keyData = pemToBuffer(privateKeyPem);
+    let cryptoKey;
+    try{
+      cryptoKey = await crypto.subtle.importKey(
+        'pkcs8', keyData, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']
+      );
+    }catch(e){
+      throw new Error('That private key could not be read — make sure you pasted the full .p8 contents.');
+    }
+
+    const header = { alg: 'ES256', kid: keyId };
+    const now = Math.floor(Date.now() / 1000);
+    const payload = { iss: teamId, iat: now, exp: now + 60 * 60 * 24 * 30 }; // 30-day token
+
+    const enc = new TextEncoder();
+    const headerB64 = base64UrlEncode(enc.encode(JSON.stringify(header)));
+    const payloadB64 = base64UrlEncode(enc.encode(JSON.stringify(payload)));
+    const signingInput = headerB64 + '.' + payloadB64;
+
+    const signature = await crypto.subtle.sign(
+      { name: 'ECDSA', hash: { name: 'SHA-256' } },
+      cryptoKey,
+      enc.encode(signingInput)
+    );
+
+    return signingInput + '.' + base64UrlEncode(signature);
+  }
+
   document.getElementById('btn-apple-connect').addEventListener('click', async () => {
     clearError('apple-error');
-    const token = document.getElementById('apple-dev-token').value.trim();
-    if(!token){ showError('apple-error', 'Paste your Apple Music developer token first.'); return; }
+    const teamId = document.getElementById('apple-team-id').value.trim();
+    const keyId = document.getElementById('apple-key-id').value.trim();
+    const privateKey = document.getElementById('apple-private-key').value.trim();
+    if(!teamId || !keyId || !privateKey){
+      showError('apple-error', 'Fill in Team ID, Key ID, and the private key.');
+      return;
+    }
     const btn = document.getElementById('btn-apple-connect');
     btn.disabled = true; btn.textContent = 'Connecting…';
     try{
+      const token = await buildAppleDeveloperToken(teamId, keyId, privateKey);
       await loadMusicKitScript();
       await window.MusicKit.configure({
         developerToken: token,
@@ -565,7 +626,7 @@
       document.getElementById('apple-status').classList.add('connected');
       enablePanel('panel-migrate');
     }catch(err){
-      showError('apple-error', 'Could not connect — check that your developer token is valid and not expired.');
+      showError('apple-error', err.message || 'Could not connect — check your Team ID, Key ID, and private key are correct.');
     }finally{
       btn.disabled = false; btn.textContent = 'Connect Apple Music';
     }
