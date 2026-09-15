@@ -206,6 +206,15 @@
   .status-icon.miss{ background:var(--err); color:#2B0A0A; }
   .log-row .title{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .log-row .detail{ color:var(--muted); font-size:0.82rem; flex:none; max-width:38%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .log-row .check{ display:flex; align-items:center; flex:none; }
+  .log-row .check input{ width:16px; height:16px; accent-color:var(--spotify); cursor:pointer; }
+  .log-row .btn-search{
+    flex:none; font-size:0.8rem; font-weight:600; padding:6px 12px; border-radius:100px;
+    background:var(--surface); border:1px solid var(--line); color:var(--text);
+    text-decoration:none;
+  }
+  .log-row .btn-search:hover{ border-color:var(--apple-b); color:var(--apple-a); }
+  .list-actions{ display:flex; gap:10px; margin-top:16px; }
 
   .progress-bar{
     height:6px; border-radius:100px; background:var(--surface-2); overflow:hidden; margin-top:16px;
@@ -240,7 +249,7 @@
 
   <div class="hero">
     <h1>Move your playlists,<br>not your streaming history.</h1>
-    <p class="sub">Crossfade reads a playlist straight from your Spotify account, matches every track in the Apple Music catalog, and rebuilds it in your library — track order included.</p>
+    <p class="sub">Crossfade reads a playlist straight from your Spotify account and hands you a one-tap Apple Music search link for every track — no Apple developer account, API key, or app review required.</p>
   </div>
 
   <div class="bridge">
@@ -253,7 +262,7 @@
     <div class="platform-card apple">
       <div class="glow"></div>
       <div class="platform-name"><span class="dot apple"></span>Apple Music</div>
-      <div class="platform-status" id="apple-status">Not connected</div>
+      <div class="platform-status connected" id="apple-status">No account needed</div>
     </div>
   </div>
 
@@ -290,66 +299,33 @@
     <div class="playlist-grid" id="playlist-grid"></div>
   </div>
 
-  <!-- STEP 3: Apple Music -->
-  <div class="panel" id="panel-apple" data-disabled="true">
-    <div class="step-head"><div class="step-num">3</div><div class="step-title">Connect Apple Music</div></div>
-    <div class="step-desc">Apple Music requires a key from an Apple Developer account, but Crossfade builds the developer token from it right here in your browser — no separate signing script to run.</div>
-
-    <div class="field-row">
-      <div class="field">
-        <label for="apple-team-id">Team ID</label>
-        <input type="text" id="apple-team-id" placeholder="e.g. ABCDE12345">
-      </div>
-      <div class="field">
-        <label for="apple-key-id">Key ID</label>
-        <input type="text" id="apple-key-id" placeholder="e.g. XYZ98W7654">
-      </div>
-    </div>
-    <div class="field">
-      <label for="apple-private-key">Private key (.p8 file contents)</label>
-      <textarea id="apple-private-key" placeholder="-----BEGIN PRIVATE KEY-----
-...
------END PRIVATE KEY-----"></textarea>
-    </div>
-    <button class="btn btn-apple" id="btn-apple-connect">Connect Apple Music</button>
-
-    <details class="help">
-      <summary>Where do I get these?</summary>
-      <div class="help-body">
-        This requires an active <strong>Apple Developer Program</strong> membership ($99/yr) — there's no free tier for Apple Music API access. Nothing here ever leaves your browser except to Apple's own servers.
-        <ol>
-          <li>In your <a href="https://developer.apple.com/account/resources/identifiers/list/musicId" target="_blank" rel="noopener">Apple Developer account</a>, create a <strong>MusicKit identifier</strong>.</li>
-          <li>Under <strong>Keys</strong>, create a new key with the <strong>MusicKit</strong> service enabled, and download the <code>.p8</code> file. Apple only lets you download it once, so keep it somewhere safe.</li>
-          <li>Open the <code>.p8</code> file in a text editor and paste its full contents — including the <code>BEGIN/END PRIVATE KEY</code> lines — into the field above.</li>
-          <li>Your <strong>Team ID</strong> is on the <a href="https://developer.apple.com/account" target="_blank" rel="noopener">Membership page</a>; the <strong>Key ID</strong> is shown next to the key you just created.</li>
-        </ol>
-      </div>
-    </details>
-    <div class="banner" id="apple-error"></div>
-  </div>
-
-  <!-- STEP 4: migrate -->
+  <!-- STEP 3: build the list -->
   <div class="panel" id="panel-migrate" data-disabled="true">
-    <div class="step-head"><div class="step-num">4</div><div class="step-title">Migrate</div></div>
-    <div class="step-desc" id="migrate-desc">Crossfade will search Apple Music for each track and rebuild the playlist in your library.</div>
+    <div class="step-head"><div class="step-num">3</div><div class="step-title">Build your Apple Music list</div></div>
+    <div class="step-desc" id="migrate-desc">No Apple account or API key needed. Crossfade pulls every track from the playlist and gives each one a direct Apple Music search link — tap it, then tap the <strong>+</strong> in Apple Music to add it to your library or a new playlist there.</div>
 
     <div class="field">
-      <label for="new-playlist-name">New playlist name</label>
+      <label for="new-playlist-name">Playlist name (for your reference / the downloaded list)</label>
       <input type="text" id="new-playlist-name">
     </div>
 
-    <button class="btn btn-primary" id="btn-migrate">Start migration</button>
+    <button class="btn btn-primary" id="btn-migrate">Build track list</button>
 
     <div class="progress-bar" id="progress-wrap" style="display:none;"><div id="progress-fill"></div></div>
     <div class="progress-label" id="progress-label" style="display:none;"></div>
 
     <div class="log" id="log" style="display:none;"></div>
 
+    <div class="list-actions" id="list-actions" style="display:none;">
+      <button class="btn btn-ghost" id="btn-copy-list">Copy list</button>
+      <button class="btn btn-ghost" id="btn-download-list">Download as text file</button>
+    </div>
+
     <div class="summary" id="summary" style="display:none;"></div>
   </div>
 
   <footer>
-    Runs entirely in your browser. Your Spotify and Apple Music credentials are never sent anywhere but Spotify and Apple's own servers.
+    Runs entirely in your browser. Your Spotify credentials are never sent anywhere but Spotify's own servers, and nothing is ever sent to Apple — Crossfade only builds search links you open yourself.
   </footer>
 
 </div>
@@ -363,8 +339,6 @@
     spotifyPlaylists: [],
     selectedPlaylist: null,
     selectedPlaylistTracks: [],
-    appleMusic: null,        // MusicKit instance
-    appleStorefront: 'us',
   };
 
   const redirectUri = window.location.origin + window.location.pathname;
@@ -532,7 +506,7 @@
     cardEl.classList.add('selected');
     state.selectedPlaylist = pl;
     document.getElementById('new-playlist-name').value = pl.name || 'Untitled playlist';
-    enablePanel('panel-apple');
+    enablePanel('panel-migrate');
   }
 
   function escapeHtml(s){
@@ -540,102 +514,9 @@
   }
 
   // ==========================================================
-  // STEP 3 — Apple Music via MusicKit JS
+  // STEP 3 — Build the Apple Music track list (no API access needed)
   // ==========================================================
-  let musicKitScriptLoaded = false;
-  function loadMusicKitScript(){
-    return new Promise((resolve, reject) => {
-      if(musicKitScriptLoaded && window.MusicKit){ resolve(); return; }
-      document.addEventListener('musickitloaded', () => { musicKitScriptLoaded = true; resolve(); }, { once: true });
-      const s = document.createElement('script');
-      s.src = 'https://js-cdn.music.apple.com/musickit/v3/musickit.js';
-      s.onerror = () => reject(new Error('Could not load MusicKit JS from Apple.'));
-      document.head.appendChild(s);
-      // fallback in case the event already fired
-      setTimeout(() => { if(window.MusicKit && !musicKitScriptLoaded){ musicKitScriptLoaded = true; resolve(); } }, 4000);
-    });
-  }
-
-  // Builds an Apple Music developer token (an ES256-signed JWT) entirely
-  // client-side, from the raw credentials Apple gives you. Nothing here
-  // is sent anywhere — the signing happens locally via Web Crypto.
-  function pemToBuffer(pem){
-    const b64 = pem
-      .replace(/-----BEGIN (.*)-----/, '')
-      .replace(/-----END (.*)-----/, '')
-      .replace(/\s+/g, '');
-    const raw = atob(b64);
-    const bytes = new Uint8Array(raw.length);
-    for(let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-    return bytes.buffer;
-  }
-
-  async function buildAppleDeveloperToken(teamId, keyId, privateKeyPem){
-    const keyData = pemToBuffer(privateKeyPem);
-    let cryptoKey;
-    try{
-      cryptoKey = await crypto.subtle.importKey(
-        'pkcs8', keyData, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']
-      );
-    }catch(e){
-      throw new Error('That private key could not be read — make sure you pasted the full .p8 contents.');
-    }
-
-    const header = { alg: 'ES256', kid: keyId };
-    const now = Math.floor(Date.now() / 1000);
-    const payload = { iss: teamId, iat: now, exp: now + 60 * 60 * 24 * 30 }; // 30-day token
-
-    const enc = new TextEncoder();
-    const headerB64 = base64UrlEncode(enc.encode(JSON.stringify(header)));
-    const payloadB64 = base64UrlEncode(enc.encode(JSON.stringify(payload)));
-    const signingInput = headerB64 + '.' + payloadB64;
-
-    const signature = await crypto.subtle.sign(
-      { name: 'ECDSA', hash: { name: 'SHA-256' } },
-      cryptoKey,
-      enc.encode(signingInput)
-    );
-
-    return signingInput + '.' + base64UrlEncode(signature);
-  }
-
-  document.getElementById('btn-apple-connect').addEventListener('click', async () => {
-    clearError('apple-error');
-    const teamId = document.getElementById('apple-team-id').value.trim();
-    const keyId = document.getElementById('apple-key-id').value.trim();
-    const privateKey = document.getElementById('apple-private-key').value.trim();
-    if(!teamId || !keyId || !privateKey){
-      showError('apple-error', 'Fill in Team ID, Key ID, and the private key.');
-      return;
-    }
-    const btn = document.getElementById('btn-apple-connect');
-    btn.disabled = true; btn.textContent = 'Connecting…';
-    try{
-      const token = await buildAppleDeveloperToken(teamId, keyId, privateKey);
-      await loadMusicKitScript();
-      await window.MusicKit.configure({
-        developerToken: token,
-        app: { name: 'Crossfade', build: '1.0.0' },
-      });
-      const music = window.MusicKit.getInstance();
-      await music.authorize();
-      state.appleMusic = music;
-      state.appleStorefront = music.storefrontId || 'us';
-
-      document.getElementById('apple-status').textContent = 'Connected';
-      document.getElementById('apple-status').classList.add('connected');
-      enablePanel('panel-migrate');
-    }catch(err){
-      showError('apple-error', err.message || 'Could not connect — check your Team ID, Key ID, and private key are correct.');
-    }finally{
-      btn.disabled = false; btn.textContent = 'Connect Apple Music';
-    }
-  });
-
-  // ==========================================================
-  // STEP 4 — Migration
-  // ==========================================================
-  document.getElementById('btn-migrate').addEventListener('click', runMigration);
+  document.getElementById('btn-migrate').addEventListener('click', buildTrackList);
 
   async function fetchAllSpotifyTracks(playlist){
     let tracks = [];
@@ -655,77 +536,9 @@
     return tracks;
   }
 
-  function normalize(s){
-    return (s || '')
-      .toLowerCase()
-      .replace(/\(feat[^)]*\)/g, '')
-      .replace(/\[feat[^\]]*\]/g, '')
-      .replace(/[^a-z0-9]+/g, ' ')
-      .trim();
-  }
-
-  function scoreCandidate(track, candidate){
-    const wantTitle = normalize(track.name);
-    const wantArtist = normalize(track.artists[0] || '');
-    const gotTitle = normalize(candidate.attributes.name);
-    const gotArtist = normalize(candidate.attributes.artistName);
-
-    let score = 0;
-    if(gotTitle === wantTitle) score += 6;
-    else if(gotTitle.includes(wantTitle) || wantTitle.includes(gotTitle)) score += 3;
-
-    if(gotArtist === wantArtist) score += 5;
-    else if(wantArtist && (gotArtist.includes(wantArtist) || wantArtist.includes(gotArtist))) score += 2.5;
-
-    return score;
-  }
-
-  async function searchAppleMusicTrack(track){
+  function appleSearchUrl(track){
     const term = [track.name, track.artists[0] || ''].join(' ').trim();
-    try{
-      const res = await state.appleMusic.api.music(
-        `/v1/catalog/${state.appleStorefront}/search`,
-        { term, types: 'songs', limit: 5 }
-      );
-      const songs = res.data?.results?.songs?.data || [];
-      if(songs.length === 0) return null;
-      let best = songs[0], bestScore = scoreCandidate(track, songs[0]);
-      for(const c of songs.slice(1)){
-        const sc = scoreCandidate(track, c);
-        if(sc > bestScore){ best = c; bestScore = sc; }
-      }
-      return bestScore >= 3 ? best : null;
-    }catch(e){
-      return null;
-    }
-  }
-
-  async function createApplePlaylist(name, description){
-    const res = await state.appleMusic.api.music('/v1/me/library/playlists', {}, {
-      fetchOptions: {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          attributes: { name, description: description || '' },
-        }),
-      },
-    });
-    return res.data.data[0].id;
-  }
-
-  async function addTracksToApplePlaylist(playlistId, songIds){
-    // Apple accepts batches; keep them modest to stay well under request limits.
-    const BATCH = 90;
-    for(let i = 0; i < songIds.length; i += BATCH){
-      const batch = songIds.slice(i, i + BATCH);
-      await state.appleMusic.api.music(`/v1/me/library/playlists/${playlistId}/tracks`, {}, {
-        fetchOptions: {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: batch.map(id => ({ id, type: 'songs' })) }),
-        },
-      });
-    }
+    return 'https://music.apple.com/us/search?term=' + encodeURIComponent(term);
   }
 
   function setProgress(done, total){
@@ -737,89 +550,83 @@
     label.innerHTML = `<span>${done} of ${total} tracks</span><span>${Math.round((done/total)*100)}%</span>`;
   }
 
-  function addLogRow(name, artist){
+  function addTrackRow(track){
     const log = document.getElementById('log');
     log.style.display = 'block';
     const row = document.createElement('div');
     row.className = 'log-row';
     row.innerHTML = `
-      <div class="status-icon pending" data-role="icon"></div>
-      <div class="title">${escapeHtml(name)} — ${escapeHtml(artist)}</div>
-      <div class="detail" data-role="detail"></div>`;
+      <label class="check"><input type="checkbox" data-role="check"></label>
+      <div class="title">${escapeHtml(track.name)} — ${escapeHtml(track.artists.join(', '))}</div>
+      <a class="btn-search" href="${appleSearchUrl(track)}" target="_blank" rel="noopener">Search</a>`;
+    const checkbox = row.querySelector('[data-role="check"]');
+    checkbox.addEventListener('change', () => {
+      row.style.opacity = checkbox.checked ? '0.5' : '1';
+    });
     log.appendChild(row);
-    log.scrollTop = log.scrollHeight;
     return row;
   }
-  function updateLogRow(row, ok, detailText){
-    const icon = row.querySelector('[data-role="icon"]');
-    const detail = row.querySelector('[data-role="detail"]');
-    icon.classList.remove('pending');
-    icon.classList.add(ok ? 'ok' : 'miss');
-    icon.textContent = ok ? '✓' : '✕';
-    detail.textContent = detailText;
+
+  function trackListAsText(name, tracks){
+    const lines = [`${name} — from Spotify via Crossfade`, ''];
+    tracks.forEach(t => lines.push(`${t.name} — ${t.artists.join(', ')}`));
+    return lines.join('\n');
   }
 
-  async function runMigration(){
+  async function buildTrackList(){
     const btn = document.getElementById('btn-migrate');
     const nameInput = document.getElementById('new-playlist-name');
     const name = nameInput.value.trim() || state.selectedPlaylist.name;
 
-    btn.disabled = true; btn.textContent = 'Migrating…';
+    btn.disabled = true; btn.textContent = 'Fetching tracks…';
     document.getElementById('log').innerHTML = '';
     document.getElementById('summary').style.display = 'none';
+    document.getElementById('list-actions').style.display = 'none';
     document.getElementById('connector').classList.add('animating');
 
     try{
       const tracks = await fetchAllSpotifyTracks(state.selectedPlaylist);
       state.selectedPlaylistTracks = tracks;
+      setProgress(tracks.length, tracks.length);
 
-      const matchedIds = [];
-      const missed = [];
-      let done = 0;
-      setProgress(0, tracks.length);
-
-      // small concurrency to keep it fast without hammering the API
-      const CONCURRENCY = 4;
-      let index = 0;
-      async function worker(){
-        while(index < tracks.length){
-          const i = index++;
-          const track = tracks[i];
-          const row = addLogRow(track.name, track.artists.join(', '));
-          const match = await searchAppleMusicTrack(track);
-          if(match){
-            matchedIds[i] = match.id;
-            updateLogRow(row, true, match.attributes.artistName);
-          }else{
-            missed.push(track);
-            updateLogRow(row, false, 'no match found');
-          }
-          done++;
-          setProgress(done, tracks.length);
-        }
-      }
-      await Promise.all(Array.from({length: Math.min(CONCURRENCY, tracks.length)}, worker));
-
-      const finalIds = matchedIds.filter(Boolean);
-      const playlistId = await createApplePlaylist(name, `Migrated from Spotify playlist "${state.selectedPlaylist.name}" via Crossfade.`);
-      if(finalIds.length > 0){
-        await addTracksToApplePlaylist(playlistId, finalIds);
-      }
+      tracks.forEach(track => addTrackRow(track));
 
       document.getElementById('connector').classList.remove('animating');
+      document.getElementById('list-actions').style.display = 'flex';
+
       const summary = document.getElementById('summary');
       summary.style.display = 'block';
       summary.innerHTML = `
-        <h3>${escapeHtml(name)} is in your Apple Music library</h3>
-        <p>${finalIds.length} of ${tracks.length} tracks matched${missed.length ? ` — ${missed.length} track${missed.length===1?'':'s'} couldn't be found on Apple Music and were skipped.` : '.'}</p>
-        <a class="open-link" href="https://music.apple.com/library/playlists/${playlistId}" target="_blank" rel="noopener">Open in Apple Music →</a>`;
+        <h3>${escapeHtml(tracks.length)} tracks ready</h3>
+        <p>Tap "Search" next to each track to open it in Apple Music, then tap the + there to add it. Or download the list below and add tracks at your own pace.</p>`;
+
+      document.getElementById('btn-copy-list').onclick = async () => {
+        try{
+          await navigator.clipboard.writeText(trackListAsText(name, tracks));
+          const b = document.getElementById('btn-copy-list');
+          const old = b.textContent; b.textContent = 'Copied';
+          setTimeout(() => { b.textContent = old; }, 1500);
+        }catch(e){ /* clipboard may be unavailable; ignore */ }
+      };
+
+      document.getElementById('btn-download-list').onclick = () => {
+        const blob = new Blob([trackListAsText(name, tracks)], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name.replace(/[^a-z0-9\- ]/gi, '').trim() + '.txt';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      };
     }catch(err){
       document.getElementById('connector').classList.remove('animating');
       const summary = document.getElementById('summary');
       summary.style.display = 'block';
-      summary.innerHTML = `<h3>Migration stopped</h3><p>${escapeHtml(err.message || 'Something went wrong.')}</p>`;
+      summary.innerHTML = `<h3>Couldn't build the list</h3><p>${escapeHtml(err.message || 'Something went wrong.')}</p>`;
     }finally{
-      btn.disabled = false; btn.textContent = 'Start migration';
+      btn.disabled = false; btn.textContent = 'Build track list';
     }
   }
 
