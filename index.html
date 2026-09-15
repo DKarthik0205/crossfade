@@ -458,7 +458,20 @@
     if(res.status === 401){
       throw new Error('Your Spotify session expired — reconnect above.');
     }
-    if(!res.ok) throw new Error('Spotify request failed (' + res.status + ')');
+    if(!res.ok){
+      let reason = '';
+      try{
+        const body = await res.json();
+        reason = body && body.error && body.error.message ? body.error.message : '';
+      }catch(e){ /* body wasn't JSON */ }
+      if(res.status === 403){
+        throw new Error(
+          'Spotify blocked this request (403)' + (reason ? ': ' + reason : '') +
+          '. If your app is still in Development Mode, open the Spotify Developer Dashboard → your app → Settings → User Management, and add the exact Spotify account email you are logging in with.'
+        );
+      }
+      throw new Error('Spotify request failed (' + res.status + ')' + (reason ? ': ' + reason : ''));
+    }
     return res.json();
   }
 
