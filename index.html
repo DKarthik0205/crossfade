@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crossfade — move Spotify playlists to Apple Music</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0B0D10;
+    --surface: #14171C;
+    --surface-2: #1B1F26;
+    --line: #262B33;
+    --text: #F2F3F5;
+    --muted: #8B909A;
+    --spotify: #1ED760;
+    --spotify-dim: #12401F;
+    --apple-a: #FB5C74;
+    --apple-b: #FA233B;
+    --apple-dim: #4A1420;
+    --ok: #1ED760;
+    --warn: #F5B94B;
+    --err: #FA5B5B;
+    --radius: 14px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter', -apple-system, system-ui, sans-serif;
+    line-height:1.5;
+    min-height:100vh;
+  }
+  h1,h2,h3{ font-family:'Space Grotesk', 'Inter', sans-serif; margin:0; }
+  a{ color:inherit; }
+  button{ font-family:inherit; }
+
+  .wrap{ max-width:1040px; margin:0 auto; padding:0 24px 96px; }
+
+  /* ---------- Hero ---------- */
+  .hero{ padding:72px 0 48px; text-align:center; }
+  .hero h1{
+    font-size:clamp(2.1rem, 4.4vw, 3.4rem);
+    font-weight:700;
+    letter-spacing:-0.02em;
+    line-height:1.08;
+  }
+  .hero p.sub{
+    max-width:520px;
+    margin:18px auto 0;
+    color:var(--muted);
+    font-size:1.05rem;
+  }
+
+  .bridge{
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
+    align-items:center;
+    gap:0;
+    margin:56px 0 8px;
+  }
+  .platform-card{
+    border-radius:var(--radius);
+    padding:26px 22px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    position:relative;
+    overflow:hidden;
+  }
+  .platform-card.spotify{ border-color:var(--spotify-dim); }
+  .platform-card.apple{ border-color:var(--apple-dim); }
+  .platform-card .glow{
+    position:absolute; inset:-40% -40% auto auto; width:220px; height:220px;
+    border-radius:50%; filter:blur(60px); opacity:0.28; pointer-events:none;
+  }
+  .platform-card.spotify .glow{ background:var(--spotify); }
+  .platform-card.apple .glow{ background:linear-gradient(135deg,var(--apple-a),var(--apple-b)); }
+
+  .platform-name{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:1.15rem; display:flex; align-items:center; gap:10px; }
+  .dot{ width:10px; height:10px; border-radius:50%; flex:none; }
+  .dot.spotify{ background:var(--spotify); box-shadow:0 0 12px var(--spotify); }
+  .dot.apple{ background:linear-gradient(135deg,var(--apple-a),var(--apple-b)); box-shadow:0 0 12px var(--apple-b); }
+
+  .platform-status{ margin-top:6px; font-size:0.88rem; color:var(--muted); }
+  .platform-status.connected{ color:var(--ok); }
+
+  .connector{
+    width:120px; height:2px; margin:0 -4px; position:relative;
+    background:linear-gradient(90deg, var(--spotify), var(--apple-b));
+    opacity:0.5;
+  }
+  .connector .track{
+    position:absolute; top:-4px; width:10px; height:10px; border-radius:50%;
+    background:#fff; box-shadow:0 0 10px #fff;
+    left:0; opacity:0; 
+  }
+  .connector.animating .track{ animation: travel 1.1s ease-in-out infinite; }
+  @keyframes travel{
+    0%{ left:0; opacity:0; }
+    10%{ opacity:1; }
+    90%{ opacity:1; }
+    100%{ left:calc(100% - 10px); opacity:0; }
+  }
+  @media (max-width: 680px){
+    .bridge{ grid-template-columns:1fr; gap:14px; }
+    .connector{ width:2px; height:36px; margin:0 auto; background:linear-gradient(180deg, var(--spotify), var(--apple-b)); }
+    .connector .track{ left:-4px; top:0; }
+    @keyframes travel{
+      0%{ top:0; opacity:0; }
+      10%{ opacity:1; }
+      90%{ opacity:1; }
+      100%{ top:calc(100% - 10px); opacity:0; }
+    }
+  }
+
+  /* ---------- Panels ---------- */
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:26px 26px 28px;
+    margin-top:20px;
+  }
+  .panel + .panel{ margin-top:20px; }
+  .panel[data-disabled="true"]{ opacity:0.45; pointer-events:none; }
+
+  .step-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:6px; }
+  .step-num{
+    font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:0.85rem;
+    color:var(--muted); border:1px solid var(--line); border-radius:100px;
+    width:24px; height:24px; display:flex; align-items:center; justify-content:center;
+    flex:none;
+  }
+  .step-title{ font-size:1.15rem; font-weight:600; }
+  .step-desc{ color:var(--muted); font-size:0.92rem; margin:6px 0 18px; max-width:620px; }
+
+  label{ display:block; font-size:0.85rem; color:var(--muted); margin-bottom:6px; }
+  input[type="text"], input[type="password"], textarea{
+    width:100%; background:var(--surface-2); border:1px solid var(--line);
+    color:var(--text); border-radius:10px; padding:11px 13px; font-size:0.94rem;
+    font-family:inherit;
+  }
+  textarea{ resize:vertical; min-height:64px; }
+  input::placeholder, textarea::placeholder{ color:#565B64; }
+  .field{ margin-bottom:14px; }
+  .field-row{ display:flex; gap:14px; flex-wrap:wrap; }
+  .field-row .field{ flex:1 1 220px; }
+
+  details.help{ margin-top:10px; }
+  details.help summary{ cursor:pointer; color:var(--muted); font-size:0.85rem; }
+  details.help summary:hover{ color:var(--text); }
+  details.help .help-body{ margin-top:10px; font-size:0.86rem; color:var(--muted); }
+  details.help .help-body ol{ margin:8px 0 0; padding-left:20px; }
+  details.help .help-body li{ margin-bottom:6px; }
+  details.help code{ background:var(--surface-2); padding:1px 6px; border-radius:5px; font-size:0.84em; color:#C9CDD4; }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    border:none; border-radius:10px; padding:12px 20px;
+    font-weight:600; font-size:0.95rem; cursor:pointer;
+    transition:transform 0.08s ease, opacity 0.15s ease;
+  }
+  .btn:active{ transform:scale(0.98); }
+  .btn:disabled{ opacity:0.4; cursor:not-allowed; }
+  .btn-spotify{ background:var(--spotify); color:#062D11; }
+  .btn-apple{ background:linear-gradient(135deg,var(--apple-a),var(--apple-b)); color:#fff; }
+  .btn-ghost{ background:var(--surface-2); color:var(--text); border:1px solid var(--line); }
+  .btn-primary{ background:var(--text); color:#0B0D10; }
+
+  .badge{ display:inline-flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--ok); }
+  .badge::before{ content:''; width:7px; height:7px; border-radius:50%; background:var(--ok); }
+
+  /* ---------- Playlist picker ---------- */
+  .playlist-grid{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+    gap:12px; margin-top:16px; max-height:420px; overflow-y:auto; padding-right:4px;
+  }
+  .playlist-card{
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:12px; cursor:pointer; display:flex; gap:12px; align-items:center;
+    text-align:left;
+  }
+  .playlist-card:hover{ border-color:#3A4048; }
+  .playlist-card.selected{ border-color:var(--spotify); box-shadow:0 0 0 1px var(--spotify) inset; }
+  .playlist-card img{ width:48px; height:48px; border-radius:6px; object-fit:cover; flex:none; background:#222; }
+  .playlist-card .meta{ min-width:0; }
+  .playlist-card .meta .name{ font-size:0.92rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .playlist-card .meta .count{ font-size:0.8rem; color:var(--muted); margin-top:2px; }
+
+  /* ---------- Migration log ---------- */
+  .log{
+    margin-top:18px; border:1px solid var(--line); border-radius:10px;
+    max-height:420px; overflow-y:auto;
+  }
+  .log-row{
+    display:flex; align-items:center; gap:12px; padding:10px 14px;
+    border-bottom:1px solid var(--line); font-size:0.88rem;
+  }
+  .log-row:last-child{ border-bottom:none; }
+  .log-row .status-icon{ width:16px; height:16px; flex:none; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; }
+  .status-icon.pending{ background:var(--surface-2); border:1px solid var(--line); }
+  .status-icon.ok{ background:var(--ok); color:#062D11; }
+  .status-icon.miss{ background:var(--err); color:#2B0A0A; }
+  .log-row .title{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .log-row .detail{ color:var(--muted); font-size:0.82rem; flex:none; max-width:38%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .progress-bar{
+    height:6px; border-radius:100px; background:var(--surface-2); overflow:hidden; margin-top:16px;
+  }
+  .progress-bar > div{
+    height:100%; width:0%; background:linear-gradient(90deg,var(--spotify),var(--apple-b));
+    transition:width 0.25s ease;
+  }
+  .progress-label{ display:flex; justify-content:space-between; font-size:0.82rem; color:var(--muted); margin-top:8px; }
+
+  .summary{
+    margin-top:18px; padding:16px 18px; border-radius:10px; background:var(--surface-2); border:1px solid var(--line);
+  }
+  .summary h3{ font-size:1rem; margin-bottom:6px; }
+  .summary p{ color:var(--muted); font-size:0.9rem; margin:0; }
+  .summary a.open-link{ display:inline-block; margin-top:12px; color:var(--apple-a); font-weight:600; text-decoration:none; font-size:0.9rem; }
+
+  .banner{
+    padding:12px 16px; border-radius:10px; font-size:0.88rem; margin-top:14px;
+    background:rgba(250,91,91,0.1); border:1px solid rgba(250,91,91,0.35); color:#FFB3B3;
+    display:none;
+  }
+  .banner.show{ display:block; }
+
+  footer{ text-align:center; color:#565B64; font-size:0.8rem; padding:40px 0 0; }
+  footer a{ color:#8B909A; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="hero">
+    <h1>Move your playlists,<br>not your streaming history.</h1>
+    <p class="sub">Crossfade reads a playlist straight from your Spotify account, matches every track in the Apple Music catalog, and rebuilds it in your library — track order included.</p>
+  </div>
+
+  <div class="bridge">
+    <div class="platform-card spotify">
+      <div class="glow"></div>
+      <div class="platform-name"><span class="dot spotify"></span>Spotify</div>
+      <div class="platform-status" id="spotify-status">Not connected</div>
+    </div>
+    <div class="connector" id="connector"><div class="track"></div></div>
+    <div class="platform-card apple">
+      <div class="glow"></div>
+      <div class="platform-name"><span class="dot apple"></span>Apple Music</div>
+      <div class="platform-status" id="apple-status">Not connected</div>
+    </div>
+  </div>
+
+  <!-- STEP 1: Spotify -->
+  <div class="panel" id="panel-spotify">
+    <div class="step-head"><div class="step-num">1</div><div class="step-title">Connect Spotify</div></div>
+    <div class="step-desc">Uses Spotify's own login screen — Crossfade never sees your password, and only requests read access to your playlists.</div>
+
+    <div class="field">
+      <label for="spotify-client-id">Spotify Client ID</label>
+      <input type="text" id="spotify-client-id" placeholder="e.g. 8f3b1c9a2d4e4f0eaa9b7c1234567890">
+    </div>
+    <button class="btn btn-spotify" id="btn-spotify-connect">Connect Spotify</button>
+
+    <details class="help">
+      <summary>Where do I get a Client ID?</summary>
+      <div class="help-body">
+        Crossfade runs entirely in your browser, so it needs its own Spotify app registration — free and takes about a minute.
+        <ol>
+          <li>Open the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify Developer Dashboard</a> and log in.</li>
+          <li>Click <strong>Create app</strong>. Name it anything, e.g. "Crossfade".</li>
+          <li>For <strong>Redirect URI</strong>, paste exactly this page's URL: <code id="redirect-uri-display"></code></li>
+          <li>Enable the <strong>Web API</strong> checkbox, save, then open the app's <strong>Settings</strong> and copy the <strong>Client ID</strong> into the field above.</li>
+        </ol>
+      </div>
+    </details>
+    <div class="banner" id="spotify-error"></div>
+  </div>
+
+  <!-- STEP 2: pick playlist -->
+  <div class="panel" id="panel-playlists" data-disabled="true">
+    <div class="step-head"><div class="step-num">2</div><div class="step-title">Choose a playlist</div></div>
+    <div class="step-desc">Every playlist in your Spotify library, newest first.</div>
+    <div class="playlist-grid" id="playlist-grid"></div>
+  </div>
+
+  <!-- STEP 3: Apple Music -->
+  <div class="panel" id="panel-apple" data-disabled="true">
+    <div class="step-head"><div class="step-num">3</div><div class="step-title">Connect Apple Music</div></div>
+    <div class="step-desc">Apple Music requires a developer token (a signed key from an Apple Developer account) — Crossfade can't generate this for you, but it only takes a few minutes if you don't already have one.</div>
+
+    <div class="field">
+      <label for="apple-dev-token">Apple Music developer token</label>
+      <textarea id="apple-dev-token" placeholder="Paste your MusicKit developer token (a long string starting with eyJ...)"></textarea>
+    </div>
+    <button class="btn btn-apple" id="btn-apple-connect">Connect Apple Music</button>
+
+    <details class="help">
+      <summary>Where do I get a developer token?</summary>
+      <div class="help-body">
+        This requires an active <strong>Apple Developer Program</strong> membership ($99/yr) — there's no free tier for Apple Music API access.
+        <ol>
+          <li>In your <a href="https://developer.apple.com/account/resources/identifiers/list/musicId" target="_blank" rel="noopener">Apple Developer account</a>, create a <strong>MusicKit identifier</strong>.</li>
+          <li>Under <strong>Keys</strong>, create a new key with the <strong>MusicKit</strong> service enabled, and download the <code>.p8</code> private key file.</li>
+          <li>Sign a JWT with that key (ES256), using your <strong>Team ID</strong> as issuer and the <strong>Key ID</strong> as the key id — Apple's <a href="https://developer.apple.com/documentation/applemusicapi/generating_developer_tokens" target="_blank" rel="noopener">developer token guide</a> has copy-pasteable examples in several languages.</li>
+          <li>Paste the resulting token above. It's safe to keep reusing the same token until it expires (up to 6 months).</li>
+        </ol>
+      </div>
+    </details>
+    <div class="banner" id="apple-error"></div>
+  </div>
+
+  <!-- STEP 4: migrate -->
+  <div class="panel" id="panel-migrate" data-disabled="true">
+    <div class="step-head"><div class="step-num">4</div><div class="step-title">Migrate</div></div>
+    <div class="step-desc" id="migrate-desc">Crossfade will search Apple Music for each track and rebuild the playlist in your library.</div>
+
+    <div class="field">
+      <label for="new-playlist-name">New playlist name</label>
+      <input type="text" id="new-playlist-name">
+    </div>
+
+    <button class="btn btn-primary" id="btn-migrate">Start migration</button>
+
+    <div class="progress-bar" id="progress-wrap" style="display:none;"><div id="progress-fill"></div></div>
+    <div class="progress-label" id="progress-label" style="display:none;"></div>
+
+    <div class="log" id="log" style="display:none;"></div>
+
+    <div class="summary" id="summary" style="display:none;"></div>
+  </div>
+
+  <footer>
+    Runs entirely in your browser. Your Spotify and Apple Music credentials are never sent anywhere but Spotify and Apple's own servers.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+
+  // ---------- shared state ----------
+  const state = {
+    spotifyToken: null,
+    spotifyPlaylists: [],
+    selectedPlaylist: null,
+    selectedPlaylistTracks: [],
+    appleMusic: null,        // MusicKit instance
+    appleStorefront: 'us',
+  };
+
+  const redirectUri = window.location.origin + window.location.pathname;
+  document.getElementById('redirect-uri-display').textContent = redirectUri;
+
+  function showError(elId, msg){
+    const el = document.getElementById(elId);
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+  function clearError(elId){
+    const el = document.getElementById(elId);
+    el.classList.remove('show');
+    el.textContent = '';
+  }
+  function enablePanel(id){ document.getElementById(id).setAttribute('data-disabled','false'); }
+
+  // ==========================================================
+  // STEP 1 — Spotify PKCE auth
+  // ==========================================================
+  const SPOTIFY_SCOPES = 'playlist-read-private playlist-read-collaborative';
+
+  function randomString(len){
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const values = crypto.getRandomValues(new Uint8Array(len));
+    return Array.from(values).map(v => chars[v % chars.length]).join('');
+  }
+  async function sha256(plain){
+    const data = new TextEncoder().encode(plain);
+    return crypto.subtle.digest('SHA-256', data);
+  }
+  function base64UrlEncode(buffer){
+    return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+      .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+
+  document.getElementById('btn-spotify-connect').addEventListener('click', async () => {
+    clearError('spotify-error');
+    const clientId = document.getElementById('spotify-client-id').value.trim();
+    if(!clientId){ showError('spotify-error','Enter your Spotify Client ID first.'); return; }
+
+    const verifier = randomString(64);
+    const challenge = base64UrlEncode(await sha256(verifier));
+    sessionStorage.setItem('sp_verifier', verifier);
+    sessionStorage.setItem('sp_client_id', clientId);
+
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      scope: SPOTIFY_SCOPES,
+      redirect_uri: redirectUri,
+      code_challenge_method: 'S256',
+      code_challenge: challenge,
+    });
+    window.location.href = 'https://accounts.spotify.com/authorize?' + params.toString();
+  });
+
+  async function exchangeSpotifyCode(code){
+    const verifier = sessionStorage.getItem('sp_verifier');
+    const clientId = sessionStorage.getItem('sp_client_id');
+    if(!verifier || !clientId) return;
+
+    const body = new URLSearchParams({
+      client_id: clientId,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      code_verifier: verifier,
+    });
+
+    try{
+      const res = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+      if(!res.ok) throw new Error('Token exchange failed (' + res.status + ')');
+      const data = await res.json();
+      state.spotifyToken = data.access_token;
+      sessionStorage.setItem('sp_access_token', data.access_token);
+
+      document.getElementById('spotify-status').textContent = 'Connected';
+      document.getElementById('spotify-status').classList.add('connected');
+      document.getElementById('spotify-client-id').value = clientId;
+      enablePanel('panel-playlists');
+      loadSpotifyPlaylists();
+    }catch(err){
+      showError('spotify-error', err.message || 'Could not connect to Spotify.');
+    }finally{
+      // clean the URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete('code');
+      url.searchParams.delete('state');
+      history.replaceState({}, '', url.toString());
+    }
+  }
+
+  // On load: handle redirect back from Spotify
+  (function checkForSpotifyRedirect(){
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const err = params.get('error');
+    if(err){
+      showError('spotify-error', 'Spotify login was cancelled or denied.');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('error');
+      history.replaceState({}, '', url.toString());
+    } else if(code){
+      exchangeSpotifyCode(code);
+    }
+  })();
+
+  async function spotifyFetch(path){
+    const res = await fetch('https://api.spotify.com/v1' + path, {
+      headers: { 'Authorization': 'Bearer ' + state.spotifyToken }
+    });
+    if(res.status === 401){
+      throw new Error('Your Spotify session expired — reconnect above.');
+    }
+    if(!res.ok) throw new Error('Spotify request failed (' + res.status + ')');
+    return res.json();
+  }
+
+  async function loadSpotifyPlaylists(){
+    const grid = document.getElementById('playlist-grid');
+    grid.innerHTML = '<div style="color:var(--muted); font-size:0.9rem;">Loading playlists…</div>';
+    try{
+      let url = '/me/playlists?limit=50';
+      let all = [];
+      while(url){
+        const data = await spotifyFetch(url);
+        all = all.concat(data.items.filter(Boolean));
+        url = data.next ? data.next.replace('https://api.spotify.com/v1','') : null;
+      }
+      state.spotifyPlaylists = all;
+      renderPlaylistGrid();
+    }catch(err){
+      grid.innerHTML = '';
+      showError('spotify-error', err.message);
+    }
+  }
+
+  function renderPlaylistGrid(){
+    const grid = document.getElementById('playlist-grid');
+    grid.innerHTML = '';
+    state.spotifyPlaylists.forEach(pl => {
+      const card = document.createElement('div');
+      card.className = 'playlist-card';
+      const img = (pl.images && pl.images[0]) ? pl.images[0].url : '';
+      card.innerHTML = `
+        ${img ? `<img src="${img}" alt="">` : `<div style="width:48px;height:48px;border-radius:6px;background:var(--surface-2);flex:none;"></div>`}
+        <div class="meta">
+          <div class="name">${escapeHtml(pl.name)}</div>
+          <div class="count">${pl.tracks.total} tracks</div>
+        </div>`;
+      card.addEventListener('click', () => selectPlaylist(pl, card));
+      grid.appendChild(card);
+    });
+  }
+
+  function selectPlaylist(pl, cardEl){
+    document.querySelectorAll('.playlist-card').forEach(c => c.classList.remove('selected'));
+    cardEl.classList.add('selected');
+    state.selectedPlaylist = pl;
+    document.getElementById('new-playlist-name').value = pl.name;
+    enablePanel('panel-apple');
+  }
+
+  function escapeHtml(s){
+    return (s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // ==========================================================
+  // STEP 3 — Apple Music via MusicKit JS
+  // ==========================================================
+  let musicKitScriptLoaded = false;
+  function loadMusicKitScript(){
+    return new Promise((resolve, reject) => {
+      if(musicKitScriptLoaded && window.MusicKit){ resolve(); return; }
+      document.addEventListener('musickitloaded', () => { musicKitScriptLoaded = true; resolve(); }, { once: true });
+      const s = document.createElement('script');
+      s.src = 'https://js-cdn.music.apple.com/musickit/v3/musickit.js';
+      s.onerror = () => reject(new Error('Could not load MusicKit JS from Apple.'));
+      document.head.appendChild(s);
+      // fallback in case the event already fired
+      setTimeout(() => { if(window.MusicKit && !musicKitScriptLoaded){ musicKitScriptLoaded = true; resolve(); } }, 4000);
+    });
+  }
+
+  document.getElementById('btn-apple-connect').addEventListener('click', async () => {
+    clearError('apple-error');
+    const token = document.getElementById('apple-dev-token').value.trim();
+    if(!token){ showError('apple-error', 'Paste your Apple Music developer token first.'); return; }
+    const btn = document.getElementById('btn-apple-connect');
+    btn.disabled = true; btn.textContent = 'Connecting…';
+    try{
+      await loadMusicKitScript();
+      await window.MusicKit.configure({
+        developerToken: token,
+        app: { name: 'Crossfade', build: '1.0.0' },
+      });
+      const music = window.MusicKit.getInstance();
+      await music.authorize();
+      state.appleMusic = music;
+      state.appleStorefront = music.storefrontId || 'us';
+
+      document.getElementById('apple-status').textContent = 'Connected';
+      document.getElementById('apple-status').classList.add('connected');
+      enablePanel('panel-migrate');
+    }catch(err){
+      showError('apple-error', 'Could not connect — check that your developer token is valid and not expired.');
+    }finally{
+      btn.disabled = false; btn.textContent = 'Connect Apple Music';
+    }
+  });
+
+  // ==========================================================
+  // STEP 4 — Migration
+  // ==========================================================
+  document.getElementById('btn-migrate').addEventListener('click', runMigration);
+
+  async function fetchAllSpotifyTracks(playlist){
+    let tracks = [];
+    let url = `/playlists/${playlist.id}/tracks?limit=100&fields=next,items(track(name,artists(name),album(name)))`;
+    while(url){
+      const data = await spotifyFetch(url);
+      data.items.forEach(item => {
+        if(!item.track) return;
+        tracks.push({
+          name: item.track.name,
+          artists: (item.track.artists || []).map(a => a.name),
+          album: item.track.album ? item.track.album.name : '',
+        });
+      });
+      url = data.next ? data.next.replace('https://api.spotify.com/v1','') : null;
+    }
+    return tracks;
+  }
+
+  function normalize(s){
+    return (s || '')
+      .toLowerCase()
+      .replace(/\(feat[^)]*\)/g, '')
+      .replace(/\[feat[^\]]*\]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
+
+  function scoreCandidate(track, candidate){
+    const wantTitle = normalize(track.name);
+    const wantArtist = normalize(track.artists[0] || '');
+    const gotTitle = normalize(candidate.attributes.name);
+    const gotArtist = normalize(candidate.attributes.artistName);
+
+    let score = 0;
+    if(gotTitle === wantTitle) score += 6;
+    else if(gotTitle.includes(wantTitle) || wantTitle.includes(gotTitle)) score += 3;
+
+    if(gotArtist === wantArtist) score += 5;
+    else if(wantArtist && (gotArtist.includes(wantArtist) || wantArtist.includes(gotArtist))) score += 2.5;
+
+    return score;
+  }
+
+  async function searchAppleMusicTrack(track){
+    const term = [track.name, track.artists[0] || ''].join(' ').trim();
+    try{
+      const res = await state.appleMusic.api.music(
+        `/v1/catalog/${state.appleStorefront}/search`,
+        { term, types: 'songs', limit: 5 }
+      );
+      const songs = res.data?.results?.songs?.data || [];
+      if(songs.length === 0) return null;
+      let best = songs[0], bestScore = scoreCandidate(track, songs[0]);
+      for(const c of songs.slice(1)){
+        const sc = scoreCandidate(track, c);
+        if(sc > bestScore){ best = c; bestScore = sc; }
+      }
+      return bestScore >= 3 ? best : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  async function createApplePlaylist(name, description){
+    const res = await state.appleMusic.api.music('/v1/me/library/playlists', {}, {
+      fetchOptions: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          attributes: { name, description: description || '' },
+        }),
+      },
+    });
+    return res.data.data[0].id;
+  }
+
+  async function addTracksToApplePlaylist(playlistId, songIds){
+    // Apple accepts batches; keep them modest to stay well under request limits.
+    const BATCH = 90;
+    for(let i = 0; i < songIds.length; i += BATCH){
+      const batch = songIds.slice(i, i + BATCH);
+      await state.appleMusic.api.music(`/v1/me/library/playlists/${playlistId}/tracks`, {}, {
+        fetchOptions: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: batch.map(id => ({ id, type: 'songs' })) }),
+        },
+      });
+    }
+  }
+
+  function setProgress(done, total){
+    const wrap = document.getElementById('progress-wrap');
+    const label = document.getElementById('progress-label');
+    wrap.style.display = 'block';
+    label.style.display = 'flex';
+    document.getElementById('progress-fill').style.width = Math.round((done/total)*100) + '%';
+    label.innerHTML = `<span>${done} of ${total} tracks</span><span>${Math.round((done/total)*100)}%</span>`;
+  }
+
+  function addLogRow(name, artist){
+    const log = document.getElementById('log');
+    log.style.display = 'block';
+    const row = document.createElement('div');
+    row.className = 'log-row';
+    row.innerHTML = `
+      <div class="status-icon pending" data-role="icon"></div>
+      <div class="title">${escapeHtml(name)} — ${escapeHtml(artist)}</div>
+      <div class="detail" data-role="detail"></div>`;
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+    return row;
+  }
+  function updateLogRow(row, ok, detailText){
+    const icon = row.querySelector('[data-role="icon"]');
+    const detail = row.querySelector('[data-role="detail"]');
+    icon.classList.remove('pending');
+    icon.classList.add(ok ? 'ok' : 'miss');
+    icon.textContent = ok ? '✓' : '✕';
+    detail.textContent = detailText;
+  }
+
+  async function runMigration(){
+    const btn = document.getElementById('btn-migrate');
+    const nameInput = document.getElementById('new-playlist-name');
+    const name = nameInput.value.trim() || state.selectedPlaylist.name;
+
+    btn.disabled = true; btn.textContent = 'Migrating…';
+    document.getElementById('log').innerHTML = '';
+    document.getElementById('summary').style.display = 'none';
+    document.getElementById('connector').classList.add('animating');
+
+    try{
+      const tracks = await fetchAllSpotifyTracks(state.selectedPlaylist);
+      state.selectedPlaylistTracks = tracks;
+
+      const matchedIds = [];
+      const missed = [];
+      let done = 0;
+      setProgress(0, tracks.length);
+
+      // small concurrency to keep it fast without hammering the API
+      const CONCURRENCY = 4;
+      let index = 0;
+      async function worker(){
+        while(index < tracks.length){
+          const i = index++;
+          const track = tracks[i];
+          const row = addLogRow(track.name, track.artists.join(', '));
+          const match = await searchAppleMusicTrack(track);
+          if(match){
+            matchedIds[i] = match.id;
+            updateLogRow(row, true, match.attributes.artistName);
+          }else{
+            missed.push(track);
+            updateLogRow(row, false, 'no match found');
+          }
+          done++;
+          setProgress(done, tracks.length);
+        }
+      }
+      await Promise.all(Array.from({length: Math.min(CONCURRENCY, tracks.length)}, worker));
+
+      const finalIds = matchedIds.filter(Boolean);
+      const playlistId = await createApplePlaylist(name, `Migrated from Spotify playlist "${state.selectedPlaylist.name}" via Crossfade.`);
+      if(finalIds.length > 0){
+        await addTracksToApplePlaylist(playlistId, finalIds);
+      }
+
+      document.getElementById('connector').classList.remove('animating');
+      const summary = document.getElementById('summary');
+      summary.style.display = 'block';
+      summary.innerHTML = `
+        <h3>${escapeHtml(name)} is in your Apple Music library</h3>
+        <p>${finalIds.length} of ${tracks.length} tracks matched${missed.length ? ` — ${missed.length} track${missed.length===1?'':'s'} couldn't be found on Apple Music and were skipped.` : '.'}</p>
+        <a class="open-link" href="https://music.apple.com/library/playlists/${playlistId}" target="_blank" rel="noopener">Open in Apple Music →</a>`;
+    }catch(err){
+      document.getElementById('connector').classList.remove('animating');
+      const summary = document.getElementById('summary');
+      summary.style.display = 'block';
+      summary.innerHTML = `<h3>Migration stopped</h3><p>${escapeHtml(err.message || 'Something went wrong.')}</p>`;
+    }finally{
+      btn.disabled = false; btn.textContent = 'Start migration';
+    }
+  }
+
+  // Restore Spotify session if we already have a token this tab
+  (function restoreSession(){
+    const token = sessionStorage.getItem('sp_access_token');
+    const clientId = sessionStorage.getItem('sp_client_id');
+    if(token && clientId){
+      state.spotifyToken = token;
+      document.getElementById('spotify-client-id').value = clientId;
+      document.getElementById('spotify-status').textContent = 'Connected';
+      document.getElementById('spotify-status').classList.add('connected');
+      enablePanel('panel-playlists');
+      loadSpotifyPlaylists();
+    }
+  })();
+
+})();
+</script>
+</body>
+</html>
