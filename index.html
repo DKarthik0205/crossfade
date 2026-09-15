@@ -502,11 +502,13 @@
       const card = document.createElement('div');
       card.className = 'playlist-card';
       const img = (pl.images && pl.images[0]) ? pl.images[0].url : '';
+      const trackCount = (pl.tracks && typeof pl.tracks.total === 'number') ? pl.tracks.total : 0;
+      const displayName = pl.name || 'Untitled playlist';
       card.innerHTML = `
         ${img ? `<img src="${img}" alt="">` : `<div style="width:48px;height:48px;border-radius:6px;background:var(--surface-2);flex:none;"></div>`}
         <div class="meta">
-          <div class="name">${escapeHtml(pl.name)}</div>
-          <div class="count">${pl.tracks.total} tracks</div>
+          <div class="name">${escapeHtml(displayName)}</div>
+          <div class="count">${trackCount} tracks</div>
         </div>`;
       card.addEventListener('click', () => selectPlaylist(pl, card));
       grid.appendChild(card);
@@ -517,7 +519,7 @@
     document.querySelectorAll('.playlist-card').forEach(c => c.classList.remove('selected'));
     cardEl.classList.add('selected');
     state.selectedPlaylist = pl;
-    document.getElementById('new-playlist-name').value = pl.name;
+    document.getElementById('new-playlist-name').value = pl.name || 'Untitled playlist';
     enablePanel('panel-apple');
   }
 
