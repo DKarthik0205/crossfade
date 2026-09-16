@@ -317,6 +317,7 @@
     <div class="log" id="log" style="display:none;"></div>
 
     <div class="list-actions" id="list-actions" style="display:none;">
+      <button class="btn btn-ghost" id="btn-select-all">Select all</button>
       <button class="btn btn-ghost" id="btn-copy-list">Copy list</button>
       <button class="btn btn-ghost" id="btn-download-list">Download as text file</button>
     </div>
@@ -610,6 +611,18 @@
 
       document.getElementById('connector').classList.remove('animating');
       document.getElementById('list-actions').style.display = 'flex';
+
+      const selectAllBtn = document.getElementById('btn-select-all');
+      selectAllBtn.textContent = 'Select all';
+      selectAllBtn.onclick = () => {
+        const boxes = document.querySelectorAll('#log [data-role="check"]');
+        const shouldCheck = selectAllBtn.textContent === 'Select all';
+        boxes.forEach(box => {
+          box.checked = shouldCheck;
+          box.dispatchEvent(new Event('change'));
+        });
+        selectAllBtn.textContent = shouldCheck ? 'Deselect all' : 'Select all';
+      };
 
       const summary = document.getElementById('summary');
       summary.style.display = 'block';
