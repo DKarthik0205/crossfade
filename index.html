@@ -526,7 +526,7 @@
   }
 
   function escapeHtml(s){
-    return (s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
 
   // ==========================================================
@@ -614,7 +614,7 @@
       const summary = document.getElementById('summary');
       summary.style.display = 'block';
       summary.innerHTML = `
-        <h3>${escapeHtml(tracks.length)} tracks ready</h3>
+        <h3>${tracks.length} tracks ready</h3>
         <p>Tap "Search" next to each track to open it in Apple Music, then tap the + there to add it. Or download the list below and add tracks at your own pace.</p>`;
 
       document.getElementById('btn-copy-list').onclick = async () => {
